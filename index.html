@@ -1,0 +1,2122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>商务工单看板</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --surface-soft: #f8fafb;
+      --ink: #17212b;
+      --muted: #66727f;
+      --line: #dbe1e6;
+      --line-strong: #c8d0d8;
+      --graphite: #1f2d38;
+      --teal: #087f71;
+      --teal-soft: #e5f5f2;
+      --blue: #2f67b2;
+      --blue-soft: #e9f0fb;
+      --amber: #a76007;
+      --amber-soft: #fff1d6;
+      --red: #b42318;
+      --red-soft: #fee9e7;
+      --green: #18794e;
+      --green-soft: #e6f4ec;
+      --shadow: 0 10px 24px rgba(28, 43, 56, .08);
+      --radius: 8px;
+      font-family: Inter, "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      background: var(--bg);
+    }
+
+    button, input, select, textarea { font: inherit; }
+
+    button { cursor: pointer; }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+    }
+
+    .icon {
+      width: 17px;
+      height: 17px;
+      stroke-width: 2;
+      flex: 0 0 auto;
+    }
+
+    .hidden { display: none !important; }
+
+    .topbar {
+      min-height: 68px;
+      padding: 0 28px;
+      color: #fff;
+      background: var(--graphite);
+      border-bottom: 3px solid var(--teal);
+      display: flex;
+      align-items: center;
+    }
+
+    .topbar-inner {
+      width: min(1540px, 100%);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+      gap: 22px;
+      align-items: center;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 21px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: #b9c3ca;
+      font-size: 12px;
+    }
+
+    .nav-tabs {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 4px;
+      background: rgba(255, 255, 255, .08);
+      border-radius: 6px;
+    }
+
+    .nav-btn {
+      min-height: 34px;
+      padding: 0 13px;
+      border: 0;
+      border-radius: 4px;
+      color: #dce3e8;
+      background: transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+    }
+
+    .nav-btn:hover { background: rgba(255, 255, 255, .08); }
+
+    .nav-btn.active {
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .today {
+      justify-self: end;
+      text-align: right;
+    }
+
+    .today strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .today span {
+      display: block;
+      margin-top: 3px;
+      color: #b9c3ca;
+      font-size: 12px;
+    }
+
+    .command-band {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(255, 255, 255, .96);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+    }
+
+    .command-bar {
+      width: min(1540px, 100%);
+      margin: 0 auto;
+      padding: 11px 28px;
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .search {
+      max-width: 620px;
+      min-height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .search:focus-within {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(8, 127, 113, .12);
+    }
+
+    .search input {
+      width: 100%;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      color: var(--ink);
+      background: transparent;
+      font-size: 13px;
+    }
+
+    .actions,
+    .inline-actions,
+    .ticket-actions,
+    .filters,
+    .segments {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      min-height: 38px;
+      padding: 0 13px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      color: var(--ink);
+      background: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .btn:hover { background: var(--surface-soft); }
+
+    .btn.primary {
+      color: #fff;
+      border-color: var(--teal);
+      background: var(--teal);
+    }
+
+    .btn.primary:hover { background: #056c60; }
+
+    .btn.danger {
+      color: var(--red);
+      border-color: #e6b9b4;
+    }
+
+    .btn.small {
+      min-height: 32px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      color: var(--muted);
+      background: #fff;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .icon-btn:hover { color: var(--ink); background: var(--surface-soft); }
+
+    .page {
+      width: min(1540px, 100%);
+      margin: 0 auto;
+      padding: 20px 28px 40px;
+    }
+
+    .notice {
+      display: none;
+      margin-bottom: 14px;
+      padding: 11px 13px;
+      border: 1px solid #a8d8cf;
+      border-radius: 6px;
+      color: #075e54;
+      background: var(--teal-soft);
+      font-size: 13px;
+    }
+
+    .notice.show { display: block; }
+    .notice.error { color: var(--red); border-color: #efbbb5; background: var(--red-soft); }
+
+    .snapshot-strip {
+      min-height: 46px;
+      margin-bottom: 14px;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--teal);
+      border-radius: 6px;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 13px;
+    }
+
+    .snapshot-strip strong { margin-right: 6px; }
+    .snapshot-strip span { color: var(--muted); }
+
+    .delta-list {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      white-space: nowrap;
+    }
+
+    .delta-list b { color: var(--ink); }
+    .delta-list .added b { color: var(--teal); }
+    .delta-list .closed b { color: var(--blue); }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .metric {
+      min-height: 112px;
+      padding: 15px 16px;
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--line-strong);
+      border-radius: var(--radius);
+      color: inherit;
+      background: var(--surface);
+      text-align: left;
+      box-shadow: 0 2px 7px rgba(28, 43, 56, .03);
+    }
+
+    button.metric:hover {
+      border-color: #aeb9c2;
+      box-shadow: var(--shadow);
+      transform: translateY(-1px);
+    }
+
+    .metric.overdue { border-top-color: var(--red); }
+    .metric.warning { border-top-color: var(--amber); }
+    .metric.kpi-rate { border-top-color: var(--teal); }
+
+    .metric-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .metric-value {
+      display: block;
+      margin-top: 8px;
+      font-size: 30px;
+      line-height: 1;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-foot {
+      display: block;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .filter-panel {
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      display: grid;
+      gap: 10px;
+    }
+
+    .filter-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .quick-filters {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .chip,
+    .segment {
+      min-height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      color: var(--muted);
+      background: var(--surface-soft);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .chip:hover,
+    .segment:hover { color: var(--ink); border-color: var(--line-strong); }
+
+    .chip.active,
+    .segment.active {
+      color: #fff;
+      border-color: var(--graphite);
+      background: var(--graphite);
+    }
+
+    .select,
+    .date-input {
+      min-height: 34px;
+      padding: 0 30px 0 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      color: var(--ink);
+      background: #fff;
+      font-size: 12px;
+    }
+
+    .data-quality {
+      color: var(--amber);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .board-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .lanes {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+
+    .lane {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #edf1f4;
+      overflow: hidden;
+    }
+
+    .lane-head {
+      height: 48px;
+      padding: 0 13px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .lane-head.pending { border-top: 3px solid var(--amber); }
+    .lane-head.checking { border-top: 3px solid var(--blue); }
+    .lane-head.done { border-top: 3px solid var(--green); }
+
+    .count {
+      min-width: 26px;
+      height: 24px;
+      padding: 0 7px;
+      border-radius: 12px;
+      color: var(--muted);
+      background: var(--surface-soft);
+      display: inline-grid;
+      place-items: center;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ticket-list {
+      max-height: calc(100vh - 288px);
+      min-height: 180px;
+      padding: 9px;
+      overflow: auto;
+    }
+
+    .ticket {
+      margin-bottom: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--surface);
+      box-shadow: 0 2px 5px rgba(28, 43, 56, .04);
+      cursor: pointer;
+    }
+
+    .ticket:hover { border-color: #b8c2ca; }
+
+    .ticket.selected {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 2px rgba(8, 127, 113, .11);
+    }
+
+    .ticket.p0, .ticket.p1 { border-left-color: var(--red); }
+    .ticket.p2 { border-left-color: var(--amber); }
+    .ticket.p3 { border-left-color: var(--blue); }
+    .ticket.p4 { border-left-color: var(--green); }
+
+    .ticket-top,
+    .ticket-meta,
+    .ticket-footer,
+    .badges,
+    .detail-head,
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .ticket-id {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 23px;
+      padding: 0 7px;
+      border-radius: 4px;
+      color: var(--muted);
+      background: #eef2f4;
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .badge.p0, .badge.p1, .badge.overdue { color: var(--red); background: var(--red-soft); }
+    .badge.p2, .badge.warning { color: var(--amber); background: var(--amber-soft); }
+    .badge.p3 { color: var(--blue); background: var(--blue-soft); }
+    .badge.p4, .badge.healthy, .badge.compliant { color: var(--green); background: var(--green-soft); }
+    .badge.missing, .badge.noncompliant { color: var(--amber); background: var(--amber-soft); }
+
+    .ticket h3 {
+      margin: 10px 0 7px;
+      font-size: 14px;
+      line-height: 1.45;
+      letter-spacing: 0;
+    }
+
+    .ticket-problem {
+      margin: 9px 0;
+      color: #43515d;
+      font-size: 12px;
+      line-height: 1.55;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .ticket-meta {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .ticket-meta span {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sla-row {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .progress {
+      height: 5px;
+      margin-top: 5px;
+      border-radius: 3px;
+      background: #e8edf0;
+      overflow: hidden;
+    }
+
+    .progress span {
+      display: block;
+      width: var(--w);
+      height: 100%;
+      background: var(--c);
+    }
+
+    .ticket-footer {
+      margin-top: 11px;
+      padding-top: 10px;
+      border-top: 1px solid #edf0f2;
+    }
+
+    .status-select {
+      min-height: 30px;
+      max-width: 112px;
+      padding: 0 24px 0 8px;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      color: var(--ink);
+      background: #fff;
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .detail-panel {
+      position: sticky;
+      top: 74px;
+      max-height: calc(100vh - 94px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: auto;
+    }
+
+    .detail-empty,
+    .empty {
+      padding: 42px 18px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .detail-body { padding: 17px; }
+
+    .detail-head {
+      align-items: flex-start;
+      padding-bottom: 13px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .detail-head h2 {
+      margin: 5px 0 0;
+      font-size: 18px;
+      line-height: 1.42;
+      letter-spacing: 0;
+    }
+
+    .detail-section {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .detail-section:last-child { border-bottom: 0; }
+
+    .detail-section h3 {
+      margin: 0 0 9px;
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0;
+    }
+
+    .work-brief {
+      display: grid;
+      gap: 8px;
+    }
+
+    .brief-row {
+      padding: 10px;
+      border-left: 3px solid var(--line-strong);
+      background: var(--surface-soft);
+      font-size: 13px;
+      line-height: 1.58;
+      overflow-wrap: anywhere;
+    }
+
+    .brief-row.action { border-left-color: var(--teal); }
+
+    .brief-row strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 14px;
+    }
+
+    .field span,
+    .field strong {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+
+    .field span {
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .field strong {
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .raw-description {
+      max-height: 180px;
+      margin: 0;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      color: #46535e;
+      background: var(--surface-soft);
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow: auto;
+    }
+
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 420px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .panel-head {
+      min-height: 58px;
+      padding: 11px 15px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .panel-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .panel-body { padding: 14px; }
+
+    .analytics-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 9px;
+      margin-bottom: 14px;
+    }
+
+    .mini-metric {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-soft);
+    }
+
+    .mini-metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .mini-metric strong {
+      display: block;
+      margin-top: 7px;
+      font-size: 22px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      background: var(--surface-soft);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr.clickable { cursor: pointer; }
+    tbody tr.clickable:hover, tbody tr.selected { background: var(--teal-soft); }
+    td.wrap { min-width: 210px; white-space: normal; }
+
+    .rate-bar {
+      min-width: 130px;
+      display: grid;
+      grid-template-columns: minmax(70px, 1fr) 38px;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .history-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .quality-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .quality-item {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-soft);
+    }
+
+    .quality-item span { display: block; color: var(--muted); font-size: 11px; }
+    .quality-item strong { display: block; margin-top: 6px; font-size: 20px; }
+
+    dialog {
+      width: min(520px, calc(100vw - 28px));
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      color: var(--ink);
+      background: var(--surface);
+      box-shadow: 0 24px 60px rgba(20, 32, 42, .28);
+    }
+
+    dialog::backdrop { background: rgba(18, 29, 38, .55); }
+
+    .dialog-head {
+      min-height: 60px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .dialog-head h2 { margin: 0; font-size: 16px; letter-spacing: 0; }
+
+    .dialog-body {
+      padding: 18px;
+      display: grid;
+      gap: 15px;
+    }
+
+    .form-field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .form-field label {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .form-field input[type="date"] {
+      width: 100%;
+      min-height: 40px;
+      padding: 0 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+    }
+
+    .file-drop {
+      min-height: 120px;
+      padding: 20px;
+      border: 1px dashed #9eabb5;
+      border-radius: 6px;
+      background: var(--surface-soft);
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
+
+    .file-drop input { width: 100%; max-width: 330px; }
+
+    .file-help {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .dialog-foot {
+      min-height: 64px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--line);
+      background: var(--surface-soft);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .toast-stack {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 50;
+      display: grid;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast {
+      width: min(390px, calc(100vw - 36px));
+      padding: 12px 14px;
+      border: 1px solid #a9d9d0;
+      border-radius: 6px;
+      color: #075e54;
+      background: #f0faf8;
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .toast.error { color: var(--red); border-color: #efbbb5; background: #fff4f3; }
+
+    @media (max-width: 1180px) {
+      .board-layout { grid-template-columns: 1fr; }
+      .detail-panel { position: static; max-height: none; }
+      .analytics-grid { grid-template-columns: 1fr; }
+      .ticket-list { max-height: 640px; }
+    }
+
+    @media (max-width: 900px) {
+      .topbar { padding: 14px 18px; }
+      .topbar-inner { grid-template-columns: 1fr auto; }
+      .nav-tabs { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
+      .nav-btn { flex: 1; }
+      .command-bar { grid-template-columns: 1fr; padding: 10px 18px; }
+      .actions { justify-content: flex-start; }
+      .page { padding: 16px 18px 32px; }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .lanes { grid-template-columns: 1fr; }
+      .ticket-list { max-height: 520px; }
+      .analytics-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 560px) {
+      .topbar-inner { grid-template-columns: 1fr; }
+      .today { justify-self: start; text-align: left; }
+      .nav-tabs { grid-column: 1; grid-row: auto; overflow: auto; }
+      .nav-btn { min-width: max-content; }
+      .command-bar, .page { padding-left: 12px; padding-right: 12px; }
+      .actions .btn { flex: 1; }
+      .kpi-grid { grid-template-columns: 1fr; }
+      .metric { min-height: 98px; }
+      .filter-row { align-items: flex-start; flex-direction: column; }
+      .filters { width: 100%; }
+      .select { flex: 1; min-width: 132px; }
+      .snapshot-strip { align-items: flex-start; flex-direction: column; }
+      .field-grid, .quality-grid { grid-template-columns: 1fr; }
+      .analytics-metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <h1>商务工单看板</h1>
+        <p id="headline">等待导入待处理工单</p>
+      </div>
+      <nav class="nav-tabs" aria-label="看板视图">
+        <button class="nav-btn active" data-view="board"><i data-lucide="layout-dashboard"></i>工单看板</button>
+        <button class="nav-btn" data-view="analytics"><i data-lucide="chart-no-axes-combined"></i>KPI 核验</button>
+        <button class="nav-btn" data-view="history"><i data-lucide="history"></i>导入记录</button>
+      </nav>
+      <div class="today">
+        <strong id="todayText">--</strong>
+        <span id="asOfText">尚无数据快照</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="command-band">
+    <div class="command-bar">
+      <label class="search">
+        <i data-lucide="search"></i>
+        <input id="searchInput" type="search" placeholder="搜索工单号、标题、车行、国家、问题描述">
+      </label>
+      <div class="actions">
+        <button class="btn primary" id="openDailyImport"><i data-lucide="file-up"></i>导入待处理</button>
+        <button class="btn" id="openKpiImport"><i data-lucide="table-properties"></i>导入 KPI 明细</button>
+        <button class="icon-btn" id="resetFilters" title="重置筛选" aria-label="重置筛选"><i data-lucide="rotate-ccw"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <main class="page">
+    <div class="notice" id="notice" role="status"></div>
+
+    <section id="boardView">
+      <div class="snapshot-strip" id="snapshotStrip"></div>
+
+      <section class="kpi-grid" aria-label="关键指标">
+        <button class="metric" data-metric-filter="open">
+          <span class="metric-label">当前未结案<i data-lucide="inbox"></i></span>
+          <strong class="metric-value" id="metricOpen">0</strong>
+          <span class="metric-foot" id="metricOpenFoot">待处理 0 · 核实中 0</span>
+        </button>
+        <button class="metric overdue" data-metric-filter="overdue">
+          <span class="metric-label">已超期<i data-lucide="circle-alert"></i></span>
+          <strong class="metric-value" id="metricOverdue">0</strong>
+          <span class="metric-foot">P0/P1 &gt; 48 小时 · P2-P4 &gt; 15 天</span>
+        </button>
+        <button class="metric warning" data-metric-filter="warning">
+          <span class="metric-label">即将超期<i data-lucide="timer"></i></span>
+          <strong class="metric-value" id="metricWarning">0</strong>
+          <span class="metric-foot">P0/P1 剩余 ≤ 24 小时 · P2-P4 剩余 ≤ 7 天</span>
+        </button>
+        <button class="metric kpi-rate" id="jumpKpi">
+          <span class="metric-label">15 天 KPI<i data-lucide="target"></i></span>
+          <strong class="metric-value" id="metricKpi">-</strong>
+          <span class="metric-foot" id="metricKpiFoot">尚未导入 KPI 明细</span>
+        </button>
+      </section>
+
+      <section class="filter-panel" aria-label="筛选">
+        <div class="filter-row">
+          <div class="quick-filters" id="quickFilters"></div>
+          <span class="data-quality" id="qualityHint"></span>
+        </div>
+        <div class="filter-row">
+          <div class="filters">
+            <select class="select" id="priorityFilter" aria-label="优先级"></select>
+            <select class="select" id="purposeFilter" aria-label="创建目的"></select>
+            <select class="select" id="supplierFilter" aria-label="车行"></select>
+            <select class="select" id="statusFilter" aria-label="状态"></select>
+            <select class="select" id="sortFilter" aria-label="排序">
+              <option value="risk">按超期风险排序</option>
+              <option value="priority">按优先级排序</option>
+              <option value="dispatch">按最后派送时间</option>
+              <option value="id">按工单号</option>
+            </select>
+          </div>
+          <button class="btn small" id="clearFilters"><i data-lucide="list-filter"></i>清空筛选</button>
+        </div>
+      </section>
+
+      <div class="board-layout" id="boardArea">
+        <div class="lanes" id="lanes"></div>
+        <aside class="detail-panel" id="detailPanel"></aside>
+      </div>
+    </section>
+
+    <section id="analyticsView" class="hidden">
+      <div class="analytics-grid">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>15 天结案 KPI</h2>
+              <p id="kpiScopeText">尚未导入商务工单明细</p>
+            </div>
+            <div class="segments" id="periodSegments">
+              <button class="segment active" data-period-mode="month">按月</button>
+              <button class="segment" data-period-mode="quarter">按季度</button>
+              <button class="segment" data-period-mode="half">按半年</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="analytics-metrics">
+              <div class="mini-metric"><span>工单总数</span><strong id="kpiTotal">0</strong></div>
+              <div class="mini-metric"><span>15 天内结案</span><strong id="kpiCompliant">0</strong></div>
+              <div class="mini-metric"><span>超过 15 天</span><strong id="kpiLate">0</strong></div>
+              <div class="mini-metric"><span>未结案 / 时间缺失</span><strong id="kpiMissing">0</strong></div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>统计周期</th><th>工单数</th><th>15 天内</th><th>超 15 天</th><th>未结案/缺失</th><th>完成率</th></tr></thead>
+                <tbody id="periodTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2 id="kpiDetailTitle">周期明细</h2>
+              <p>结案时间 - 最后派送时间 ≤ 15 天</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>工单号</th><th>优先级</th><th>最后派送</th><th>结案时间</th><th>耗时</th><th>结果</th></tr></thead>
+              <tbody id="kpiDetailTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="historyView" class="hidden">
+      <div class="history-grid">
+        <section class="panel">
+          <div class="panel-head">
+            <div><h2>每日待处理导入</h2><p>按导入日期与上一批次工单号对比</p></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>日期</th><th>文件</th><th>本批工单</th><th>新增</th><th>保留</th><th>自动结案</th><th>导入时间</th></tr></thead>
+              <tbody id="dailyHistoryTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div><h2>KPI 明细导入</h2><p>按工单号更新累计统计池</p></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>文件</th><th>读取行数</th><th>新增</th><th>更新</th><th>导入时间</th></tr></thead>
+              <tbody id="kpiHistoryTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div><h2>数据质量</h2><p>缺失时间字段不会进入超期或 15 天达标计算</p></div>
+            <button class="btn danger small" id="clearData"><i data-lucide="trash-2"></i>清空本地数据</button>
+          </div>
+          <div class="panel-body">
+            <div class="quality-grid">
+              <div class="quality-item"><span>待处理缺最后派送时间</span><strong id="missingDispatchCount">0</strong></div>
+              <div class="quality-item"><span>KPI 缺最后派送时间</span><strong id="kpiMissingDispatchCount">0</strong></div>
+              <div class="quality-item"><span>KPI 缺结案时间</span><strong id="kpiMissingCloseCount">0</strong></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="dailyImportDialog">
+    <form id="dailyImportForm">
+      <div class="dialog-head">
+        <h2>导入待处理工单</h2>
+        <button type="button" class="icon-btn" data-close-dialog="dailyImportDialog" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-field">
+          <label for="dailyImportDate">工单快照日期</label>
+          <input id="dailyImportDate" type="date" required>
+        </div>
+        <div class="form-field">
+          <label for="dailyFileInput">待处理工单明细</label>
+          <div class="file-drop">
+            <input id="dailyFileInput" type="file" accept=".xls,.xlsx,.csv" required>
+          </div>
+          <span class="file-help">支持 .xls、.xlsx、.csv；必须包含“工单号”，超期判断需“紧急程度”和“最后派送时间”。</span>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <button type="button" class="btn" data-close-dialog="dailyImportDialog">取消</button>
+        <button type="submit" class="btn primary" id="dailyImportSubmit"><i data-lucide="file-check-2"></i>开始对比导入</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="kpiImportDialog">
+    <form id="kpiImportForm">
+      <div class="dialog-head">
+        <h2>导入 KPI 商务工单明细</h2>
+        <button type="button" class="icon-btn" data-close-dialog="kpiImportDialog" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-field">
+          <label for="kpiFileInput">月 / 季度 / 半年明细</label>
+          <div class="file-drop">
+            <input id="kpiFileInput" type="file" accept=".xls,.xlsx,.csv" required>
+          </div>
+          <span class="file-help">按工单号更新累计明细；统计周期取“最后派送时间”，达标口径为“结案时间 - 最后派送时间 ≤ 15 天”。</span>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <button type="button" class="btn" data-close-dialog="kpiImportDialog">取消</button>
+        <button type="submit" class="btn primary" id="kpiImportSubmit"><i data-lucide="chart-spline"></i>导入并核验</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <script src="./xlsx.full.min.js"></script>
+  <script src="./lucide.min.js"></script>
+  <script>
+    "use strict";
+
+    const DAY = 24 * 60 * 60 * 1000;
+    const HOUR = 60 * 60 * 1000;
+    const STORE_KEY = "business-ticket-board-v4";
+    const STATUS_LABEL = { pending: "待处理", checking: "核实中", done: "结案" };
+    const LANE_DEFS = [
+      { key: "pending", label: "待处理", cls: "pending" },
+      { key: "checking", label: "核实中", cls: "checking" },
+      { key: "done", label: "完成", cls: "done" }
+    ];
+
+    const emptyState = () => ({
+      version: 4,
+      tickets: [],
+      snapshots: [],
+      kpiRecords: [],
+      kpiImports: []
+    });
+
+    let state = loadState();
+    let activeView = "board";
+    let quickFilter = "all";
+    let selectedTicketId = state.tickets[0]?.id || null;
+    let periodMode = "month";
+    let selectedPeriod = null;
+
+    const $ = id => document.getElementById(id);
+    const esc = value => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+    function loadState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+        if (saved?.version === 4 && Array.isArray(saved.tickets)) return saved;
+      } catch (error) {
+        console.warn("无法读取本地数据", error);
+      }
+      return emptyState();
+    }
+
+    function saveState() {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }
+
+    function localDateKey(date = new Date()) {
+      const d = date instanceof Date ? date : new Date(date);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    function formatDate(value, withTime = false) {
+      const date = value instanceof Date ? value : parseDate(value);
+      if (!date) return "-";
+      const options = withTime
+        ? { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }
+        : { year: "numeric", month: "2-digit", day: "2-digit" };
+      return new Intl.DateTimeFormat("zh-CN", options).format(date);
+    }
+
+    function parseDate(value) {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+      if (value === null || value === undefined || value === "") return null;
+      if (typeof value === "number" && window.XLSX?.SSF) {
+        const parsed = XLSX.SSF.parse_date_code(value);
+        if (parsed) return new Date(parsed.y, parsed.m - 1, parsed.d, parsed.H || 0, parsed.M || 0, Math.floor(parsed.S || 0));
+      }
+      const text = String(value).trim();
+      if (!text) return null;
+      if (/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:?\d{2})$/.test(text)) {
+        const isoDate = new Date(text);
+        return Number.isNaN(isoDate.getTime()) ? null : isoDate;
+      }
+      const match = text.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?:[ T](\d{1,2}):?(\d{2})?(?::?(\d{2}))?)?/);
+      if (match) {
+        const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4] || 0), Number(match[5] || 0), Number(match[6] || 0));
+        return Number.isNaN(date.getTime()) ? null : date;
+      }
+      const date = new Date(text);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function asIso(value) {
+      const date = parseDate(value);
+      return date ? date.toISOString() : null;
+    }
+
+    function endOfDate(dateKey) {
+      const [year, month, day] = dateKey.split("-").map(Number);
+      return new Date(year, month - 1, day, 23, 59, 59, 999);
+    }
+
+    function latestSnapshot() {
+      return [...state.snapshots].sort((a, b) => b.date.localeCompare(a.date) || b.importedAt.localeCompare(a.importedAt))[0] || null;
+    }
+
+    function riskAsOf() {
+      const latest = latestSnapshot();
+      if (!latest) return new Date();
+      return latest.date === localDateKey() ? new Date() : endOfDate(latest.date);
+    }
+
+    function cleanText(value) {
+      return String(value ?? "")
+        .replace(/\r\n?/g, "\n")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+
+    function shorten(value, max = 180) {
+      const text = cleanText(value).replace(/\n/g, " ");
+      return text.length > max ? `${text.slice(0, max).trim()}...` : text;
+    }
+
+    function captureField(text, labels, stops) {
+      const labelExpr = labels.map(label => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+      const stopExpr = stops.map(label => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+      const regex = new RegExp(`(?:^|\\n)[ \\t]*(?:${labelExpr})[ \\t]*[:：][ \\t]*([\\s\\S]*?)(?=\\n[ \\t]*(?:${stopExpr})[ \\t]*[:：]?|$)`, "i");
+      return cleanText(text.match(regex)?.[1] || "");
+    }
+
+    function buildWorkBrief(description, title) {
+      const text = cleanText(description);
+      const labels = ["问题概述", "现前台信息", "当前核实到的信息", "信息来源", "凭证说明/截图/链接", "客户诉求", "需要商务核实什么，或确认什么内容", "需要商务核实什么或确认什么内容", "需要商务核实什么", "【商务工单诉求】", "商务工单诉求"];
+      let problem = captureField(text, ["问题概述"], labels.filter(item => item !== "问题概述"));
+      let action = captureField(text, ["需要商务核实什么，或确认什么内容", "需要商务核实什么或确认什么内容", "需要商务核实什么"], labels);
+      if (!action) action = captureField(text, ["客户诉求"], labels.filter(item => item !== "客户诉求"));
+
+      if (!problem) {
+        problem = text
+          .replace(/【问题描述】/g, "")
+          .replace(/【此工单非T3升级，升级申诉请建对应的T3工单】/g, "")
+          .replace(/（附件请上传至文件管理）/g, "")
+          .replace(/https?:\/\/\S+/g, "")
+          .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[A-Za-z0-9_?=&%#./:-]*)?/gi, "")
+          .split(/\n(?:问题概述|现前台信息|当前核实到的信息|信息来源|凭证说明|客户诉求|【商务工单诉求】|需要商务核实什么)/)[0];
+      }
+
+      problem = shorten((problem || title || "问题描述待补充").replace(/^[\s\-—:：]+/, ""), 220);
+      action = shorten(action || `核实“${title || "该工单"}”的事实与责任，并给出处理结论`, 180);
+      return { problem, action };
+    }
+
+    function normalizeStatus(value) {
+      const text = String(value || "");
+      if (/结案|已完成|完成|关闭/.test(text)) return "done";
+      if (/核实|处理中|受理中|跟进中/.test(text)) return "checking";
+      return "pending";
+    }
+
+    function normalizePriority(value) {
+      const match = String(value || "").toUpperCase().match(/P[0-4]/);
+      return match ? match[0] : "P4";
+    }
+
+    function valueOf(row, ...keys) {
+      for (const key of keys) {
+        if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "") return row[key];
+      }
+      return "";
+    }
+
+    function normalizeRow(row) {
+      const id = String(valueOf(row, "工单号", "工单编号", "编号", "ID")).trim().replace(/\.0$/, "");
+      const title = cleanText(valueOf(row, "工单标题", "标题"));
+      const description = cleanText(valueOf(row, "问题描述", "工单描述", "描述"));
+      const brief = buildWorkBrief(description, title);
+      return {
+        id,
+        title: title || brief.problem.slice(0, 42),
+        priority: normalizePriority(valueOf(row, "紧急程度", "优先级")),
+        sourceStatus: cleanText(valueOf(row, "工单状态", "状态")),
+        orderNo: String(valueOf(row, "订单号", "关联订单号") || "").trim(),
+        category: cleanText(valueOf(row, "倒数第三级工单类型", "工单类型", "分类")),
+        subcategory: cleanText(valueOf(row, "关键词", "倒数第二级工单类型", "最后一级工单类型")),
+        purpose: cleanText(valueOf(row, "创建目的", "升级目的", "目的")) || "未标注",
+        supplier: cleanText(valueOf(row, "供应商")),
+        dealer: cleanText(valueOf(row, "车行", "供应商")) || "未标注",
+        country: cleanText(valueOf(row, "国家")) || "未标注",
+        city: cleanText(valueOf(row, "城市")),
+        handler: cleanText(valueOf(row, "最终受理人", "受理人", "责任客服")) || "未分配",
+        owner: cleanText(valueOf(row, "最终受理人", "受理人", "责任客服")) || "未分配",
+        createdTime: asIso(valueOf(row, "创建时间")),
+        lastDispatchTime: asIso(valueOf(row, "最后派送时间", "首次派送时间")),
+        closeTime: asIso(valueOf(row, "结案时间")),
+        updatedTime: asIso(valueOf(row, "工单更新时间")),
+        problem: brief.problem,
+        action: brief.action,
+        originalDescription: description,
+        currentTag: cleanText(valueOf(row, "当前标签", "历史标签")),
+        responsibility: cleanText(valueOf(row, "主责方"))
+      };
+    }
+
+    function findHeaderRow(rows) {
+      const limit = Math.min(rows.length, 20);
+      for (let index = 0; index < limit; index += 1) {
+        const cells = rows[index].map(cell => String(cell ?? "").trim());
+        if (cells.includes("工单号")) return index;
+      }
+      return -1;
+    }
+
+    async function readRows(file) {
+      if (!window.XLSX) throw new Error("Excel 解析组件未加载，请确认 xlsx.full.min.js 与页面在同一目录。");
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true, dense: false });
+      let best = null;
+
+      for (const sheetName of workbook.SheetNames) {
+        const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "", raw: false, dateNF: "yyyy-mm-dd hh:mm:ss" });
+        const headerIndex = findHeaderRow(matrix);
+        if (headerIndex < 0) continue;
+        const headers = matrix[headerIndex].map(cell => String(cell ?? "").trim());
+        const rows = matrix.slice(headerIndex + 1).map(cells => Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""])));
+        const valid = rows.filter(row => String(valueOf(row, "工单号", "工单编号", "编号", "ID")).trim());
+        if (!best || valid.length > best.rows.length) best = { sheetName, rows: valid };
+      }
+
+      if (!best) throw new Error("未找到“工单号”表头，请检查文件格式。");
+      return best;
+    }
+
+    function dedupeRows(rows) {
+      const map = new Map();
+      rows.map(normalizeRow).filter(row => row.id).forEach(row => map.set(row.id, row));
+      return [...map.values()];
+    }
+
+    function getSlaMs(ticket) {
+      return ["P0", "P1"].includes(ticket.priority) ? 48 * HOUR : 15 * DAY;
+    }
+
+    function getWarningMs(ticket) {
+      return ["P0", "P1"].includes(ticket.priority) ? 24 * HOUR : 7 * DAY;
+    }
+
+    function getRisk(ticket) {
+      if (ticket.workflowStatus === "done") return { key: "done", label: "已结案", elapsed: null, remaining: null };
+      const dispatched = parseDate(ticket.lastDispatchTime);
+      if (!dispatched) return { key: "missing", label: "时间缺失", elapsed: null, remaining: null };
+      const elapsed = riskAsOf().getTime() - dispatched.getTime();
+      const remaining = getSlaMs(ticket) - elapsed;
+      if (elapsed > getSlaMs(ticket)) return { key: "overdue", label: "已超期", elapsed, remaining };
+      if (remaining >= 0 && remaining <= getWarningMs(ticket)) return { key: "warning", label: "即将超期", elapsed, remaining };
+      return { key: "healthy", label: "正常", elapsed, remaining };
+    }
+
+    function formatDuration(ms) {
+      if (ms === null || ms === undefined || Number.isNaN(ms)) return "-";
+      const abs = Math.abs(ms);
+      if (abs < DAY) return `${(abs / HOUR).toFixed(abs < 10 * HOUR ? 1 : 0)} 小时`;
+      return `${(abs / DAY).toFixed(abs < 10 * DAY ? 1 : 0)} 天`;
+    }
+
+    function riskText(ticket) {
+      const risk = getRisk(ticket);
+      if (risk.key === "overdue") return `已超 ${formatDuration(Math.abs(risk.remaining))}`;
+      if (risk.key === "warning") return `剩余 ${formatDuration(risk.remaining)}`;
+      if (risk.key === "healthy") return `已用 ${formatDuration(risk.elapsed)}`;
+      return risk.label;
+    }
+
+    function priorityRank(priority) {
+      return ({ P0: 0, P1: 1, P2: 2, P3: 3, P4: 4 })[priority] ?? 5;
+    }
+
+    function currentSnapshotIdSet() {
+      return new Set(latestSnapshot()?.ids || []);
+    }
+
+    function importDaily(rows, date, fileName) {
+      const latest = latestSnapshot();
+      if (latest && date < latest.date) throw new Error(`已有 ${latest.date} 的更新快照，不能倒序导入 ${date}。`);
+
+      const normalized = dedupeRows(rows);
+      if (!normalized.length) throw new Error("文件中没有可导入的工单。");
+
+      const sameDateSnapshot = state.snapshots.find(item => item.date === date);
+      const previous = [...state.snapshots]
+        .filter(item => item.date < date)
+        .sort((a, b) => b.date.localeCompare(a.date))[0] || null;
+      const comparison = previous || (sameDateSnapshot ? [...state.snapshots].filter(item => item.date !== date).sort((a, b) => b.date.localeCompare(a.date))[0] : null);
+      const previousIds = new Set(comparison?.ids || []);
+      const currentIds = new Set(normalized.map(row => row.id));
+      const existingMap = new Map(state.tickets.map(ticket => [ticket.id, ticket]));
+      const importedAt = new Date().toISOString();
+
+      let added = 0;
+      let retained = 0;
+      let reopened = 0;
+
+      normalized.forEach(row => {
+        const existing = existingMap.get(row.id);
+        const isRetained = previousIds.has(row.id);
+        if (isRetained) retained += 1;
+        else added += 1;
+
+        let workflowStatus = existing?.workflowStatus || normalizeStatus(row.sourceStatus);
+        let closeTime = existing?.closeTime || row.closeTime;
+        let closeSource = existing?.closeSource || (row.closeTime ? "source" : null);
+        if (workflowStatus === "done" && !/结案|已完成|完成|关闭/.test(row.sourceStatus)) {
+          workflowStatus = "pending";
+          closeTime = null;
+          closeSource = null;
+          reopened += 1;
+        }
+
+        existingMap.set(row.id, {
+          ...existing,
+          ...row,
+          workflowStatus,
+          closeTime,
+          closeSource,
+          firstSeenDate: existing?.firstSeenDate || date,
+          lastSeenDate: date,
+          statusChangedAt: existing?.statusChangedAt || importedAt
+        });
+      });
+
+      let autoClosed = 0;
+      if (comparison) {
+        comparison.ids.forEach(id => {
+          if (currentIds.has(id)) return;
+          const ticket = existingMap.get(id);
+          if (!ticket || ticket.workflowStatus === "done") return;
+          ticket.workflowStatus = "done";
+          ticket.closeTime = endOfDate(date).toISOString();
+          ticket.closeSource = "daily_compare";
+          ticket.statusChangedAt = importedAt;
+          autoClosed += 1;
+        });
+      }
+
+      const snapshot = {
+        date,
+        fileName,
+        importedAt,
+        sheetRows: rows.length,
+        ids: [...currentIds],
+        added,
+        retained,
+        autoClosed,
+        reopened
+      };
+
+      state.tickets = [...existingMap.values()];
+      state.snapshots = [...state.snapshots.filter(item => item.date !== date), snapshot].sort((a, b) => a.date.localeCompare(b.date));
+      selectedTicketId = normalized[0]?.id || selectedTicketId;
+      saveState();
+      return snapshot;
+    }
+
+    function importKpi(rows, fileName) {
+      const normalized = dedupeRows(rows);
+      if (!normalized.length) throw new Error("文件中没有可导入的 KPI 工单。");
+      const map = new Map(state.kpiRecords.map(record => [record.id, record]));
+      let added = 0;
+      let updated = 0;
+
+      normalized.forEach(row => {
+        if (map.has(row.id)) updated += 1;
+        else added += 1;
+        map.set(row.id, { ...map.get(row.id), ...row, kpiImportedAt: new Date().toISOString() });
+      });
+
+      const batch = {
+        fileName,
+        importedAt: new Date().toISOString(),
+        rows: normalized.length,
+        added,
+        updated
+      };
+      state.kpiRecords = [...map.values()];
+      state.kpiImports.push(batch);
+      saveState();
+      return batch;
+    }
+
+    function setTicketStatus(id, status) {
+      const ticket = state.tickets.find(item => item.id === id);
+      if (!ticket || !STATUS_LABEL[status]) return;
+      ticket.workflowStatus = status;
+      ticket.statusChangedAt = new Date().toISOString();
+      if (status === "done") {
+        ticket.closeTime = new Date().toISOString();
+        ticket.closeSource = "manual";
+      } else if (ticket.closeSource === "manual") {
+        ticket.closeTime = null;
+        ticket.closeSource = null;
+      }
+      saveState();
+      toast(`#${id} 已更新为“${STATUS_LABEL[status]}”`);
+      renderAll();
+    }
+
+    function uniqueOptions(values, label) {
+      const options = [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "zh-Hans-CN"));
+      return `<option value="">全部${esc(label)}</option>${options.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join("")}`;
+    }
+
+    function initFilters() {
+      const currentValues = {
+        priority: $("priorityFilter").value,
+        purpose: $("purposeFilter").value,
+        supplier: $("supplierFilter").value,
+        status: $("statusFilter").value
+      };
+      $("priorityFilter").innerHTML = uniqueOptions(state.tickets.map(ticket => ticket.priority), "优先级");
+      $("purposeFilter").innerHTML = uniqueOptions(state.tickets.map(ticket => ticket.purpose), "创建目的");
+      $("supplierFilter").innerHTML = uniqueOptions(state.tickets.map(ticket => ticket.dealer), "车行");
+      $("statusFilter").innerHTML = `<option value="">全部状态</option>${Object.entries(STATUS_LABEL).map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}`;
+      $("priorityFilter").value = currentValues.priority;
+      $("purposeFilter").value = currentValues.purpose;
+      $("supplierFilter").value = currentValues.supplier;
+      $("statusFilter").value = currentValues.status;
+    }
+
+    function getFilteredTickets() {
+      const query = $("searchInput").value.trim().toLowerCase();
+      const priority = $("priorityFilter").value;
+      const purpose = $("purposeFilter").value;
+      const supplier = $("supplierFilter").value;
+      const status = $("statusFilter").value;
+      const sort = $("sortFilter").value;
+
+      const rows = state.tickets.filter(ticket => {
+        const risk = getRisk(ticket).key;
+        const haystack = [ticket.id, ticket.title, ticket.orderNo, ticket.problem, ticket.action, ticket.dealer, ticket.country, ticket.city, ticket.purpose, ticket.owner].join(" ").toLowerCase();
+        const quickOk = quickFilter === "all"
+          || quickFilter === ticket.priority
+          || quickFilter === risk
+          || (quickFilter === "open" && ticket.workflowStatus !== "done");
+        return quickOk
+          && (!query || haystack.includes(query))
+          && (!priority || ticket.priority === priority)
+          && (!purpose || ticket.purpose === purpose)
+          && (!supplier || ticket.dealer === supplier)
+          && (!status || ticket.workflowStatus === status);
+      });
+
+      rows.sort((a, b) => {
+        if (sort === "priority") return priorityRank(a.priority) - priorityRank(b.priority) || String(b.id).localeCompare(String(a.id));
+        if (sort === "dispatch") return (parseDate(a.lastDispatchTime)?.getTime() || Infinity) - (parseDate(b.lastDispatchTime)?.getTime() || Infinity);
+        if (sort === "id") return String(b.id).localeCompare(String(a.id), undefined, { numeric: true });
+        const riskRank = { overdue: 0, warning: 1, missing: 2, healthy: 3, done: 4 };
+        const aRisk = getRisk(a);
+        const bRisk = getRisk(b);
+        return riskRank[aRisk.key] - riskRank[bRisk.key]
+          || (aRisk.remaining ?? Infinity) - (bRisk.remaining ?? Infinity)
+          || priorityRank(a.priority) - priorityRank(b.priority);
+      });
+      return rows;
+    }
+
+    function renderSnapshot() {
+      const latest = latestSnapshot();
+      if (!latest) {
+        $("snapshotStrip").innerHTML = `<div><strong>尚无待处理快照</strong><span>导入文件后生成首个工单基线</span></div><button class="btn small primary" data-open-import="daily"><i data-lucide="file-up"></i>导入待处理</button>`;
+        $("asOfText").textContent = "尚无数据快照";
+        return;
+      }
+      $("snapshotStrip").innerHTML = `
+        <div><strong>${esc(latest.date)} 快照</strong><span>${esc(latest.fileName)} · ${latest.ids.length} 条</span></div>
+        <div class="delta-list">
+          <span class="added">新增 <b>${latest.added}</b></span>
+          <span>保留 <b>${latest.retained}</b></span>
+          <span class="closed">自动结案 <b>${latest.autoClosed}</b></span>
+          ${latest.reopened ? `<span>重新出现 <b>${latest.reopened}</b></span>` : ""}
+        </div>`;
+      $("asOfText").textContent = `风险计算截至 ${formatDate(riskAsOf(), true)}`;
+    }
+
+    function renderMetrics() {
+      const open = state.tickets.filter(ticket => ticket.workflowStatus !== "done");
+      const pending = open.filter(ticket => ticket.workflowStatus === "pending").length;
+      const checking = open.filter(ticket => ticket.workflowStatus === "checking").length;
+      const overdue = open.filter(ticket => getRisk(ticket).key === "overdue").length;
+      const warning = open.filter(ticket => getRisk(ticket).key === "warning").length;
+      const missing = open.filter(ticket => getRisk(ticket).key === "missing").length;
+      const overallKpi = calculateKpi(state.kpiRecords);
+
+      $("metricOpen").textContent = open.length;
+      $("metricOpenFoot").textContent = `待处理 ${pending} · 核实中 ${checking}`;
+      $("metricOverdue").textContent = overdue;
+      $("metricWarning").textContent = warning;
+      $("metricKpi").textContent = overallKpi.total ? `${overallKpi.rate}%` : "-";
+      $("metricKpiFoot").textContent = overallKpi.total ? `${overallKpi.compliant} / ${overallKpi.total} 条在 15 天内结案` : "尚未导入 KPI 明细";
+      $("qualityHint").textContent = missing ? `${missing} 条缺最后派送时间` : "";
+      $("headline").textContent = latestSnapshot()
+        ? `未结案 ${open.length} · 已超期 ${overdue} · 即将超期 ${warning}`
+        : "等待导入待处理工单";
+    }
+
+    function renderQuickFilters() {
+      const counts = Object.fromEntries(["P0", "P1", "P2", "P3", "P4"].map(priority => [priority, state.tickets.filter(ticket => ticket.priority === priority).length]));
+      const open = state.tickets.filter(ticket => ticket.workflowStatus !== "done");
+      const options = [
+        ["all", `全部 ${state.tickets.length}`],
+        ["P0", `P0 ${counts.P0}`],
+        ["P1", `P1 ${counts.P1}`],
+        ["P2", `P2 ${counts.P2}`],
+        ["P3", `P3 ${counts.P3}`],
+        ["P4", `P4 ${counts.P4}`],
+        ["warning", `即将超期 ${open.filter(ticket => getRisk(ticket).key === "warning").length}`],
+        ["overdue", `已超期 ${open.filter(ticket => getRisk(ticket).key === "overdue").length}`]
+      ];
+      $("quickFilters").innerHTML = options.map(([key, label]) => `<button class="chip ${quickFilter === key ? "active" : ""}" data-quick="${key}">${label}</button>`).join("");
+    }
+
+    function renderTicket(ticket) {
+      const risk = getRisk(ticket);
+      const ratio = risk.elapsed === null ? 0 : Math.max(0, Math.min(100, Math.round(risk.elapsed / getSlaMs(ticket) * 100)));
+      const colors = { overdue: "var(--red)", warning: "var(--amber)", healthy: "var(--green)", missing: "var(--line-strong)", done: "var(--blue)" };
+      return `<article class="ticket ${ticket.priority.toLowerCase()} ${ticket.id === selectedTicketId ? "selected" : ""}" data-ticket-id="${esc(ticket.id)}" tabindex="0">
+        <div class="ticket-top">
+          <span class="ticket-id">#${esc(ticket.id)}</span>
+          <div class="badges"><span class="badge ${ticket.priority.toLowerCase()}">${esc(ticket.priority)}</span><span class="badge ${risk.key}">${esc(risk.label)}</span></div>
+        </div>
+        <h3>${esc(ticket.title)}</h3>
+        <p class="ticket-problem">${esc(ticket.problem)}</p>
+        <div class="ticket-meta">
+          <span>${esc(ticket.purpose)}</span><span>·</span><span>${esc(ticket.dealer)}</span><span>·</span><span>${esc(ticket.country)}</span>
+        </div>
+        <div class="sla-row"><span>最后派送 ${formatDate(ticket.lastDispatchTime, true)}</span><strong>${esc(riskText(ticket))}</strong></div>
+        <div class="progress"><span style="--w:${ratio}%;--c:${colors[risk.key]}"></span></div>
+        <div class="ticket-footer">
+          <span class="ticket-id">${esc(ticket.owner)}</span>
+          <select class="status-select" data-status-id="${esc(ticket.id)}" aria-label="工单状态">
+            ${Object.entries(STATUS_LABEL).map(([key, label]) => `<option value="${key}" ${ticket.workflowStatus === key ? "selected" : ""}>${label}</option>`).join("")}
+          </select>
+        </div>
+      </article>`;
+    }
+
+    function renderBoard() {
+      const rows = getFilteredTickets();
+      $("lanes").innerHTML = LANE_DEFS.map(lane => {
+        const laneRows = rows.filter(ticket => ticket.workflowStatus === lane.key);
+        return `<section class="lane">
+          <div class="lane-head ${lane.cls}"><span>${lane.label}</span><span class="count">${laneRows.length}</span></div>
+          <div class="ticket-list">${laneRows.length ? laneRows.map(renderTicket).join("") : `<div class="empty">暂无${lane.label}工单</div>`}</div>
+        </section>`;
+      }).join("");
+
+      if (!rows.some(ticket => ticket.id === selectedTicketId)) selectedTicketId = rows[0]?.id || null;
+      renderDetail();
+    }
+
+    function closeSourceLabel(source) {
+      return ({ manual: "人工结案", daily_compare: "每日对比自动结案", source: "源文件结案" })[source] || "-";
+    }
+
+    function renderDetail() {
+      const ticket = state.tickets.find(item => item.id === selectedTicketId);
+      if (!ticket) {
+        $("detailPanel").innerHTML = `<div class="detail-empty">选择一条工单查看处理明细</div>`;
+        return;
+      }
+      const risk = getRisk(ticket);
+      $("detailPanel").innerHTML = `<div class="detail-body">
+        <div class="detail-head">
+          <div><span class="ticket-id">#${esc(ticket.id)}</span><h2>${esc(ticket.title)}</h2></div>
+          <div class="badges"><span class="badge ${ticket.priority.toLowerCase()}">${esc(ticket.priority)}</span><span class="badge ${risk.key}">${esc(risk.label)}</span></div>
+        </div>
+        <section class="detail-section">
+          <h3>工单处理明细</h3>
+          <div class="work-brief">
+            <div class="brief-row"><strong>工单的问题是什么</strong>${esc(ticket.problem)}</div>
+            <div class="brief-row action"><strong>需要我处理什么</strong>${esc(ticket.action)}</div>
+          </div>
+        </section>
+        <section class="detail-section">
+          <h3>基础信息</h3>
+          <div class="field-grid">
+            <div class="field"><span>订单号</span><strong>${esc(ticket.orderNo || "-")}</strong></div>
+            <div class="field"><span>创建目的</span><strong>${esc(ticket.purpose)}</strong></div>
+            <div class="field"><span>车行</span><strong>${esc(ticket.dealer)}</strong></div>
+            <div class="field"><span>国家 / 城市</span><strong>${esc([ticket.country, ticket.city].filter(Boolean).join(" / ") || "-")}</strong></div>
+            <div class="field"><span>当前受理人</span><strong>${esc(ticket.owner)}</strong></div>
+            <div class="field"><span>主责方</span><strong>${esc(ticket.responsibility || "-")}</strong></div>
+            <div class="field"><span>最后派送时间</span><strong>${formatDate(ticket.lastDispatchTime, true)}</strong></div>
+            <div class="field"><span>SLA 状态</span><strong>${esc(riskText(ticket))}</strong></div>
+            <div class="field"><span>结案时间</span><strong>${formatDate(ticket.closeTime, true)}</strong></div>
+            <div class="field"><span>结案方式</span><strong>${esc(closeSourceLabel(ticket.closeSource))}</strong></div>
+          </div>
+        </section>
+        <section class="detail-section">
+          <h3>原始问题描述</h3>
+          <pre class="raw-description">${esc(ticket.originalDescription || "-")}</pre>
+        </section>
+        <section class="detail-section">
+          <div class="ticket-actions">
+            <button class="btn small" data-set-status="pending" data-ticket="${esc(ticket.id)}"><i data-lucide="inbox"></i>待处理</button>
+            <button class="btn small" data-set-status="checking" data-ticket="${esc(ticket.id)}"><i data-lucide="search-check"></i>核实中</button>
+            <button class="btn small primary" data-set-status="done" data-ticket="${esc(ticket.id)}"><i data-lucide="circle-check-big"></i>结案</button>
+          </div>
+        </section>
+      </div>`;
+      refreshIcons();
+    }
+
+    function calculateKpi(records) {
+      let compliant = 0;
+      let late = 0;
+      let missing = 0;
+      records.forEach(record => {
+        const dispatched = parseDate(record.lastDispatchTime);
+        const closed = parseDate(record.closeTime);
+        if (!dispatched || !closed) {
+          missing += 1;
+          return;
+        }
+        const duration = closed.getTime() - dispatched.getTime();
+        if (duration >= 0 && duration <= 15 * DAY) compliant += 1;
+        else late += 1;
+      });
+      const total = records.length;
+      return { total, compliant, late, missing, rate: total ? Math.round(compliant / total * 1000) / 10 : 0 };
+    }
+
+    function periodKey(record, mode = periodMode) {
+      const date = parseDate(record.lastDispatchTime);
+      if (!date) return "时间缺失";
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      if (mode === "quarter") return `${year} Q${Math.ceil(month / 3)}`;
+      if (mode === "half") return `${year} H${month <= 6 ? 1 : 2}`;
+      return `${year}-${String(month).padStart(2, "0")}`;
+    }
+
+    function groupedKpi() {
+      const groups = new Map();
+      state.kpiRecords.forEach(record => {
+        const key = periodKey(record);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(record);
+      });
+      return [...groups.entries()].sort(([a], [b]) => b.localeCompare(a));
+    }
+
+    function kpiResult(record) {
+      const dispatched = parseDate(record.lastDispatchTime);
+      const closed = parseDate(record.closeTime);
+      if (!dispatched || !closed) return { key: "missing", label: "时间缺失", duration: null };
+      const duration = closed.getTime() - dispatched.getTime();
+      if (duration >= 0 && duration <= 15 * DAY) return { key: "compliant", label: "达标", duration };
+      return { key: "noncompliant", label: "未达标", duration };
+    }
+
+    function renderAnalytics() {
+      const groups = groupedKpi();
+      if (!groups.some(([key]) => key === selectedPeriod)) selectedPeriod = groups[0]?.[0] || null;
+      const selectedRecords = groups.find(([key]) => key === selectedPeriod)?.[1] || [];
+      const selectedStats = calculateKpi(selectedRecords);
+      const allStats = calculateKpi(state.kpiRecords);
+
+      $("kpiScopeText").textContent = state.kpiRecords.length
+        ? `累计 ${state.kpiRecords.length} 条 · 整体完成率 ${allStats.rate}%`
+        : "尚未导入商务工单明细";
+      $("kpiTotal").textContent = selectedStats.total;
+      $("kpiCompliant").textContent = selectedStats.compliant;
+      $("kpiLate").textContent = selectedStats.late;
+      $("kpiMissing").textContent = selectedStats.missing;
+      $("kpiDetailTitle").textContent = selectedPeriod ? `${selectedPeriod} 工单明细` : "周期明细";
+
+      $("periodTable").innerHTML = groups.length ? groups.map(([key, records]) => {
+        const stats = calculateKpi(records);
+        return `<tr class="clickable ${key === selectedPeriod ? "selected" : ""}" data-period="${esc(key)}">
+          <td><strong>${esc(key)}</strong></td><td>${stats.total}</td><td>${stats.compliant}</td><td>${stats.late}</td><td>${stats.missing}</td>
+          <td><div class="rate-bar"><div class="progress"><span style="--w:${stats.rate}%;--c:${stats.rate >= 90 ? "var(--green)" : "var(--amber)"}"></span></div><strong>${stats.rate}%</strong></div></td>
+        </tr>`;
+      }).join("") : `<tr><td colspan="6"><div class="empty">导入 KPI 明细后生成统计</div></td></tr>`;
+
+      $("kpiDetailTable").innerHTML = selectedRecords.length ? [...selectedRecords]
+        .sort((a, b) => String(b.id).localeCompare(String(a.id), undefined, { numeric: true }))
+        .map(record => {
+          const result = kpiResult(record);
+          return `<tr><td>#${esc(record.id)}</td><td>${esc(record.priority)}</td><td>${formatDate(record.lastDispatchTime, true)}</td><td>${formatDate(record.closeTime, true)}</td><td>${formatDuration(result.duration)}</td><td><span class="badge ${result.key}">${result.label}</span></td></tr>`;
+        }).join("") : `<tr><td colspan="6"><div class="empty">暂无周期明细</div></td></tr>`;
+    }
+
+    function renderHistory() {
+      const dailyRows = [...state.snapshots].sort((a, b) => b.date.localeCompare(a.date));
+      $("dailyHistoryTable").innerHTML = dailyRows.length ? dailyRows.map(batch => `<tr>
+        <td><strong>${esc(batch.date)}</strong></td><td class="wrap">${esc(batch.fileName)}</td><td>${batch.ids.length}</td><td>${batch.added}</td><td>${batch.retained}</td><td>${batch.autoClosed}</td><td>${formatDate(batch.importedAt, true)}</td>
+      </tr>`).join("") : `<tr><td colspan="7"><div class="empty">暂无待处理导入记录</div></td></tr>`;
+
+      const kpiRows = [...state.kpiImports].reverse();
+      $("kpiHistoryTable").innerHTML = kpiRows.length ? kpiRows.map(batch => `<tr>
+        <td class="wrap">${esc(batch.fileName)}</td><td>${batch.rows}</td><td>${batch.added}</td><td>${batch.updated}</td><td>${formatDate(batch.importedAt, true)}</td>
+      </tr>`).join("") : `<tr><td colspan="5"><div class="empty">暂无 KPI 导入记录</div></td></tr>`;
+
+      $("missingDispatchCount").textContent = state.tickets.filter(ticket => ticket.workflowStatus !== "done" && !parseDate(ticket.lastDispatchTime)).length;
+      $("kpiMissingDispatchCount").textContent = state.kpiRecords.filter(record => !parseDate(record.lastDispatchTime)).length;
+      $("kpiMissingCloseCount").textContent = state.kpiRecords.filter(record => !parseDate(record.closeTime)).length;
+    }
+
+    function renderAll() {
+      initFilters();
+      renderSnapshot();
+      renderMetrics();
+      renderQuickFilters();
+      renderBoard();
+      renderAnalytics();
+      renderHistory();
+      refreshIcons();
+    }
+
+    function refreshIcons() {
+      if (window.lucide) lucide.createIcons({ attrs: { "aria-hidden": "true" } });
+    }
+
+    function switchView(view) {
+      activeView = view;
+      $("boardView").classList.toggle("hidden", view !== "board");
+      $("analyticsView").classList.toggle("hidden", view !== "analytics");
+      $("historyView").classList.toggle("hidden", view !== "history");
+      document.querySelectorAll(".nav-btn").forEach(button => button.classList.toggle("active", button.dataset.view === view));
+      $("searchInput").disabled = view !== "board";
+      refreshIcons();
+    }
+
+    function clearFilters() {
+      quickFilter = "all";
+      $("searchInput").value = "";
+      $("priorityFilter").value = "";
+      $("purposeFilter").value = "";
+      $("supplierFilter").value = "";
+      $("statusFilter").value = "";
+      $("sortFilter").value = "risk";
+      renderAll();
+    }
+
+    function toast(message, type = "success") {
+      const item = document.createElement("div");
+      item.className = `toast ${type === "error" ? "error" : ""}`;
+      item.textContent = message;
+      $("toastStack").appendChild(item);
+      window.setTimeout(() => item.remove(), 5200);
+    }
+
+    function setImportBusy(kind, busy) {
+      const button = kind === "daily" ? $("dailyImportSubmit") : $("kpiImportSubmit");
+      button.disabled = busy;
+      button.innerHTML = busy
+        ? "正在读取..."
+        : kind === "daily"
+          ? `<i data-lucide="file-check-2"></i>开始对比导入`
+          : `<i data-lucide="chart-spline"></i>导入并核验`;
+      refreshIcons();
+    }
+
+    document.addEventListener("click", event => {
+      const nav = event.target.closest("[data-view]");
+      if (nav) {
+        switchView(nav.dataset.view);
+        return;
+      }
+
+      const closeDialog = event.target.closest("[data-close-dialog]");
+      if (closeDialog) {
+        $(closeDialog.dataset.closeDialog).close();
+        return;
+      }
+
+      const importTrigger = event.target.closest("[data-open-import]");
+      if (importTrigger?.dataset.openImport === "daily") {
+        $("dailyImportDialog").showModal();
+        return;
+      }
+
+      const quick = event.target.closest("[data-quick]");
+      if (quick) {
+        quickFilter = quick.dataset.quick;
+        renderAll();
+        return;
+      }
+
+      const metric = event.target.closest("[data-metric-filter]");
+      if (metric) {
+        quickFilter = metric.dataset.metricFilter;
+        switchView("board");
+        renderAll();
+        $("boardArea").scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+
+      const ticket = event.target.closest("[data-ticket-id]");
+      if (ticket && !event.target.closest("select")) {
+        selectedTicketId = ticket.dataset.ticketId;
+        renderBoard();
+        refreshIcons();
+        return;
+      }
+
+      const statusButton = event.target.closest("[data-set-status]");
+      if (statusButton) {
+        setTicketStatus(statusButton.dataset.ticket, statusButton.dataset.setStatus);
+        return;
+      }
+
+      const period = event.target.closest("[data-period]");
+      if (period) {
+        selectedPeriod = period.dataset.period;
+        renderAnalytics();
+        return;
+      }
+
+      const mode = event.target.closest("[data-period-mode]");
+      if (mode) {
+        periodMode = mode.dataset.periodMode;
+        selectedPeriod = null;
+        document.querySelectorAll("[data-period-mode]").forEach(button => button.classList.toggle("active", button === mode));
+        renderAnalytics();
+      }
+    });
+
+    document.addEventListener("change", event => {
+      const statusSelect = event.target.closest("[data-status-id]");
+      if (statusSelect) {
+        setTicketStatus(statusSelect.dataset.statusId, statusSelect.value);
+        return;
+      }
+      if (event.target.matches("#priorityFilter, #purposeFilter, #supplierFilter, #statusFilter, #sortFilter")) renderAll();
+    });
+
+    $("searchInput").addEventListener("input", () => {
+      renderBoard();
+      refreshIcons();
+    });
+    $("openDailyImport").addEventListener("click", () => $("dailyImportDialog").showModal());
+    $("openKpiImport").addEventListener("click", () => $("kpiImportDialog").showModal());
+    $("resetFilters").addEventListener("click", clearFilters);
+    $("clearFilters").addEventListener("click", clearFilters);
+    $("jumpKpi").addEventListener("click", () => switchView("analytics"));
+
+    $("dailyImportForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      const file = $("dailyFileInput").files[0];
+      const date = $("dailyImportDate").value;
+      if (!file || !date) return;
+      setImportBusy("daily", true);
+      try {
+        const parsed = await readRows(file);
+        const result = importDaily(parsed.rows, date, file.name);
+        $("dailyImportDialog").close();
+        $("dailyImportForm").reset();
+        $("dailyImportDate").value = localDateKey();
+        clearFilters();
+        switchView("board");
+        toast(`导入完成：新增 ${result.added} 条，保留 ${result.retained} 条，自动结案 ${result.autoClosed} 条。`);
+      } catch (error) {
+        console.error(error);
+        toast(error.message || "导入失败，请检查文件。", "error");
+      } finally {
+        setImportBusy("daily", false);
+      }
+    });
+
+    $("kpiImportForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      const file = $("kpiFileInput").files[0];
+      if (!file) return;
+      setImportBusy("kpi", true);
+      try {
+        const parsed = await readRows(file);
+        const result = importKpi(parsed.rows, file.name);
+        $("kpiImportDialog").close();
+        $("kpiImportForm").reset();
+        selectedPeriod = null;
+        renderAll();
+        switchView("analytics");
+        toast(`KPI 明细已更新：新增 ${result.added} 条，更新 ${result.updated} 条。`);
+      } catch (error) {
+        console.error(error);
+        toast(error.message || "KPI 明细导入失败，请检查文件。", "error");
+      } finally {
+        setImportBusy("kpi", false);
+      }
+    });
+
+    $("clearData").addEventListener("click", () => {
+      const confirmed = window.confirm("确认清空看板内的全部导入记录、工单状态和 KPI 数据？此操作无法撤销。");
+      if (!confirmed) return;
+      state = emptyState();
+      selectedTicketId = null;
+      selectedPeriod = null;
+      localStorage.removeItem(STORE_KEY);
+      clearFilters();
+      switchView("board");
+      toast("本地看板数据已清空。");
+    });
+
+    $("todayText").textContent = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).format(new Date());
+    $("dailyImportDate").value = localDateKey();
+    renderAll();
+  </script>
+</body>
+</html>
