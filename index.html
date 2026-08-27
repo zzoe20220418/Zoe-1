@@ -1221,6 +1221,7 @@
     const DAY = 24 * 60 * 60 * 1000;
     const HOUR = 60 * 60 * 1000;
     const STORE_KEY = "business-ticket-board-v4";
+    const BRIEF_VERSION = 3;
     const STATUS_LABEL = { pending: "待处理", checking: "核实中", done: "结案" };
     const LANE_DEFS = [
       { key: "pending", label: "待处理", cls: "pending" },
@@ -1263,6 +1264,17 @@
 
     function saveState() {
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }
+
+    function refreshStoredBriefs() {
+      let changed = false;
+      state.tickets = state.tickets.map(ticket => {
+        if (!ticket.originalDescription || ticket.briefVersion === BRIEF_VERSION) return ticket;
+        const brief = buildWorkBrief(ticket.originalDescription, ticket.title);
+        changed = true;
+        return { ...ticket, ...brief, briefVersion: BRIEF_VERSION };
+      });
+      if (changed) saveState();
     }
 
     function localDateKey(date = new Date()) {
@@ -1341,25 +1353,188 @@
       return cleanText(text.match(regex)?.[1] || "");
     }
 
+    const BRIEF_LABELS = [
+      "问题概述", "现前台信息", "当前核实到的信息", "信息来源", "凭证说明/截图/链接",
+      "客户诉求", "需要商务核实什么，或确认什么内容", "需要商务核实什么或确认什么内容",
+      "需要商务核实什么", "商务工单诉求"
+    ];
+
+    function escapeRegExp(value) {
+      return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function prepareDescription(value) {
+      let text = cleanText(value)
+        .replace(/【问题描述】/g, "")
+        .replace(/【此工单非T3升级，升级申诉请建对应的T3工单】/gi, "")
+        .replace(/（附件请上传至文件管理）/g, "")
+        .replace(/https?:\/\/\S+/g, "")
+        .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[A-Za-z0-9_?=&%#./:-]*)?/gi, "");
+
+      const labelExpr = [...BRIEF_LABELS]
+        .sort((a, b) => b.length - a.length)
+        .map(escapeRegExp)
+        .join("|");
+      text = text.replace(new RegExp(`\\s*(?:【(${labelExpr})】|(${labelExpr}))\\s*[:：]?`, "g"), (_, bracketed, plain) => `\n${bracketed || plain}：`);
+      return cleanText(text).replace(/^[\s\-—:：]+/, "");
+    }
+
+    function splitBriefSentences(value) {
+      return cleanText(value)
+        .replace(/[。！？!?；;]+/g, "\n")
+        .split(/\n+/)
+        .map(item => cleanText(item).replace(/^[\s\-—:：]+|[\s\-—:：]+$/g, ""))
+        .filter(item => item.length >= 4);
+    }
+
+    function isBriefNoise(value) {
+      const text = cleanText(value);
+      if (!text) return true;
+      if (BRIEF_LABELS.some(label => text === label || text === `${label}：`)) return true;
+      return /此工单非T3|升级申诉|附件请上传|紧急程度.{0,20}(?:选择|选为|选的)|无法选择信息维护|所以选.{0,8}定责|创建目的.{0,16}(?:选择|选为)|仅用于选择|无实际诉求/.test(text);
+    }
+
+    function compressBriefSentence(value) {
+      return cleanText(value)
+        .replace(new RegExp(`^(?:${BRIEF_LABELS.map(escapeRegExp).join("|")})[：:]?\\s*`), "")
+        .replace(/此单客人/g, "客户")
+        .replace(/此单|该单/g, "该订单")
+        .replace(/客人/g, "客户")
+        .replace(/我们(?:的)?(?:前台|页面)/g, "页面")
+        .replace(/工作人员[^，。；]{0,20}(?:告知|反馈)(?:我们)?/g, "门店反馈")
+        .replace(/但是最终/g, "但")
+        .replace(/但是/g, "但")
+        .replace(/因为页面没有/g, "因页面未")
+        .replace(/页面没有/g, "页面未")
+        .replace(/被要求支付/g, "需支付")
+        .replace(/要求我们以最快的时间/g, "要求尽快")
+        .replace(/需要我们以最快的时间/g, "需尽快")
+        .replace(/已经二次核对/g, "已核对")
+        .replace(/是否可以/g, "能否")
+        .replace(/车行方的意愿是/g, "车行希望")
+        .replace(/请尽快/g, "尽快")
+        .replace(/吧(?=$|[。！])/g, "")
+        .replace(/[ \t]*([，。；])[ \t]*/g, "$1")
+        .replace(/，{2,}/g, "，")
+        .replace(/。{2,}/g, "。")
+        .trim();
+    }
+
+    function findFeeName(text) {
+      const known = text.match(/(?:异地还车|单程|机场|跨境|里程|附加|服务|手续|清洁|加油|停车|租车|保险|违章|取消|额外)(?:相关)?(?:费|费用)/);
+      return known?.[0] || "";
+    }
+
+    function findAmount(text) {
+      const match = text.match(/(?:EUR|USD|GBP|CNY|€|\$|£|¥)?\s*\d+(?:[.,]\d+)?\s*(?:欧元|美元|英镑|人民币|元|EUR|USD|GBP|CNY)/i);
+      return match?.[0]?.replace(/\s+/g, "") || "";
+    }
+
+    function buildFeeBrief(problemText, requestText) {
+      const source = cleanText(`${problemText}\n${requestText}`);
+      const fee = findFeeName(source);
+      if (!fee) return null;
+
+      const amount = findAmount(source);
+      const timing = source.match(/(?:取车|还车|预订|结算|到店)时/)?.[0] || "";
+      const customerMustPay = /(?:客户|客人).{0,20}(?:被要求|需要|需|应).{0,8}(?:支付|缴纳|承担)/.test(source);
+      const pageMissing = /(?:页面|前台).{0,14}(?:没有|未|无).{0,10}(?:提醒|提示|展示|显示)|(?:页面|前台)没有/.test(source);
+      const dealerDidNotCharge = /(?:车行|门店).{0,28}(?:没有|未).{0,12}(?:扣|收取)|没有扣(?:客户|客人)/.test(source);
+      const systemMissing = /(?:车行|门店)系统.{0,18}(?:不包含|未包含|没有|无)/.test(source);
+      const wantsReminder = /(?:添加|补充|增加|维护|修复).{0,18}(?:提醒|提示|展示|显示)|(?:提醒|提示).{0,12}(?:添加|补充|增加|维护|修复)/.test(source);
+      const wantsPrepay = /(?:确认|支持|能否|是否|技术手段).{0,28}(?:预付|打包)|(?:预付|打包).{0,20}(?:确认|支持|能否|是否)/.test(source);
+      if (![customerMustPay, pageMissing, dealerDidNotCharge, systemMissing, wantsReminder, wantsPrepay].some(Boolean)) return null;
+
+      const problemParts = [];
+      let main = "";
+      if (customerMustPay) main = `客户${timing}需支付${amount}${fee}`;
+      else if (amount) main = `${fee}金额为${amount}`;
+      if (pageMissing) main += `${main ? "，但" : "页面"}${main ? "页面未提醒" : "未提醒该费用"}`;
+      if (dealerDidNotCharge) main += `${main ? "，车行最终未收取该费用" : "车行最终未收取该费用"}`;
+      if (main) problemParts.push(main);
+      if (systemMissing) problemParts.push(`车行系统未包含${main ? "该费用" : fee}`);
+
+      const actionParts = [];
+      if (wantsReminder || pageMissing) actionParts.push(`尽快添加${fee}提醒`);
+      if (wantsPrepay) actionParts.push(`确认能否支持客户预付${actionParts.length ? "该费用" : fee}`);
+
+      if (!problemParts.length && !actionParts.length) return null;
+      return {
+        problem: shorten(`${problemParts.join("；")}。`, 150),
+        action: shorten(`${actionParts.join("，并")}。`, 110)
+      };
+    }
+
+    function scoreProblemSentence(value) {
+      const text = cleanText(value);
+      let score = 0;
+      if (/(?:错误|异常|失败|缺失|不一致|无法|不能|未|没有|无|多收|少收|重复|取消|拒绝|投诉|损失)/.test(text)) score += 5;
+      if (/(?:页面|前台|系统|订单|价格|费用|车辆|门店|车行|客户)/.test(text)) score += 2;
+      if (/\d+(?:[.,]\d+)?\s*(?:欧元|美元|英镑|人民币|元|天|小时)/.test(text)) score += 3;
+      if (/(?:导致|因此|最终|实际|目前|但|却)/.test(text)) score += 2;
+      if (/(?:要求|需要|请|尽快|核实|确认|修复|添加|处理)/.test(text) && !/(?:未|没有|无法|错误|异常)/.test(text)) score -= 2;
+      return score;
+    }
+
+    function scoreActionSentence(value) {
+      const text = cleanText(value);
+      let score = 0;
+      if (/(?:要求|需要|请|尽快|诉求|希望)/.test(text)) score += 4;
+      if (/(?:核实|确认|修复|添加|补充|维护|处理|协调|跟进|提供|支持|赔付|退款|回复|定责)/.test(text)) score += 4;
+      if (/被要求/.test(text) && !/(?:核实|确认|修复|添加|补充|维护|处理|协调|跟进|提供|支持|赔付|退款|回复|定责)/.test(text)) score -= 8;
+      if (/(?:紧急程度|无法选择|选的定责|选择高)/.test(text)) score -= 8;
+      if (/^请尽快(?:修复|处理)[吧。！]*$/.test(text)) score -= 2;
+      return score;
+    }
+
+    function selectBriefSentences(value, scorer, limit) {
+      const candidates = splitBriefSentences(value)
+        .map((text, index) => ({ text: compressBriefSentence(text), index }))
+        .filter(item => item.text && !isBriefNoise(item.text))
+        .map(item => ({ ...item, score: scorer(item.text) }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score || a.index - b.index)
+        .slice(0, limit)
+        .sort((a, b) => a.index - b.index);
+
+      const selected = [];
+      candidates.forEach(item => {
+        if (selected.some(existing => existing.includes(item.text) || item.text.includes(existing))) return;
+        selected.push(item.text);
+      });
+      return selected;
+    }
+
+    function toDirectAction(value) {
+      return compressBriefSentence(value)
+        .replace(/^(?:车行|门店|客户|供应商)(?:方)?(?:要求|希望|诉求是|诉求为)?(?:我们)?/g, "")
+        .replace(/^(?:要求|需要|请)(?:我们|商务)?/g, "")
+        .replace(/^商务(?:核实|确认)/, match => match.slice(2))
+        .replace(/确认(.{0,24})是否(?=[\u4e00-\u9fa5A-Za-z])/, "确认$1能否")
+        .replace(/是否能(?:够)?|是否可以/g, "能否")
+        .replace(/^[，,\s]+/, "")
+        .trim();
+    }
+
     function buildWorkBrief(description, title) {
-      const text = cleanText(description);
-      const labels = ["问题概述", "现前台信息", "当前核实到的信息", "信息来源", "凭证说明/截图/链接", "客户诉求", "需要商务核实什么，或确认什么内容", "需要商务核实什么或确认什么内容", "需要商务核实什么", "【商务工单诉求】", "商务工单诉求"];
-      let problem = captureField(text, ["问题概述"], labels.filter(item => item !== "问题概述"));
-      let action = captureField(text, ["需要商务核实什么，或确认什么内容", "需要商务核实什么或确认什么内容", "需要商务核实什么"], labels);
-      if (!action) action = captureField(text, ["客户诉求"], labels.filter(item => item !== "客户诉求"));
+      const text = prepareDescription(description);
+      const problemSection = captureField(text, ["问题概述"], BRIEF_LABELS.filter(item => item !== "问题概述"));
+      let requestSection = captureField(text, ["需要商务核实什么，或确认什么内容", "需要商务核实什么或确认什么内容", "需要商务核实什么"], BRIEF_LABELS);
+      if (!requestSection) requestSection = captureField(text, ["客户诉求"], BRIEF_LABELS.filter(item => item !== "客户诉求"));
 
-      if (!problem) {
-        problem = text
-          .replace(/【问题描述】/g, "")
-          .replace(/【此工单非T3升级，升级申诉请建对应的T3工单】/g, "")
-          .replace(/（附件请上传至文件管理）/g, "")
-          .replace(/https?:\/\/\S+/g, "")
-          .replace(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[A-Za-z0-9_?=&%#./:-]*)?/gi, "")
-          .split(/\n(?:问题概述|现前台信息|当前核实到的信息|信息来源|凭证说明|客户诉求|【商务工单诉求】|需要商务核实什么)/)[0];
-      }
+      const problemSource = problemSection || text.split(/\n(?:现前台信息|当前核实到的信息|信息来源|凭证说明\/截图\/链接|客户诉求|商务工单诉求|需要商务核实什么)/)[0];
+      const feeBrief = buildFeeBrief(problemSource, requestSection);
+      if (feeBrief?.problem && feeBrief?.action) return feeBrief;
 
-      problem = shorten((problem || title || "问题描述待补充").replace(/^[\s\-—:：]+/, ""), 220);
-      action = shorten(action || `核实“${title || "该工单"}”的事实与责任，并给出处理结论`, 180);
+      const problemSentences = selectBriefSentences(problemSource, scoreProblemSentence, 3);
+      const actionSentences = selectBriefSentences(`${requestSection}\n${problemSource}`, scoreActionSentence, 3)
+        .map(toDirectAction)
+        .filter(Boolean)
+        .filter((item, index, rows) => rows.findIndex(row => row.includes(item) || item.includes(row)) === index);
+
+      const fallbackProblem = compressBriefSentence(problemSource || title || "问题描述待补充");
+      const problem = shorten(`${(problemSentences.length ? problemSentences : [fallbackProblem]).join("；").replace(/[。；]+$/, "")}。`, 160);
+      const action = shorten(`${(actionSentences.length ? actionSentences : [`核实${title ? `“${title}”` : "该工单"}并给出处理结论`]).join("，并").replace(/[。；]+$/, "")}。`, 120);
       return { problem, action };
     }
 
@@ -1408,6 +1583,7 @@
         updatedTime: asIso(valueOf(row, "工单更新时间")),
         problem: brief.problem,
         action: brief.action,
+        briefVersion: BRIEF_VERSION,
         originalDescription: description,
         currentTag: cleanText(valueOf(row, "当前标签", "历史标签")),
         responsibility: cleanText(valueOf(row, "主责方"))
@@ -2114,6 +2290,7 @@
       toast("本地看板数据已清空。");
     });
 
+    refreshStoredBriefs();
     $("todayText").textContent = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).format(new Date());
     $("dailyImportDate").value = localDateKey();
     renderAll();
