@@ -1545,6 +1545,10 @@
       return "pending";
     }
 
+    function isSourceClosed(row) {
+      return Boolean(row.closeTime) || /结案|已完成|完成|关闭/.test(row.sourceStatus || "");
+    }
+
     function normalizePriority(value) {
       const match = String(value || "").toUpperCase().match(/P[0-4]/);
       return match ? match[0] : "P4";
@@ -1694,10 +1698,24 @@
         if (isRetained) retained += 1;
         else added += 1;
 
+        const sourceClosed = isSourceClosed(row);
+        const manuallyClosed = existing?.closeSource === "manual";
+        const autoClosed = existing?.closeSource === "daily_compare";
         let workflowStatus = existing?.workflowStatus || normalizeStatus(row.sourceStatus);
         let closeTime = existing?.closeTime || row.closeTime;
         let closeSource = existing?.closeSource || (row.closeTime ? "source" : null);
-        if (workflowStatus === "done" && !/结案|已完成|完成|关闭/.test(row.sourceStatus)) {
+
+        // A daily source file can still list a ticket after it was completed in this board.
+        // Preserve manual completion; only reopen tickets that were auto-closed by a prior comparison.
+        if (manuallyClosed) {
+          workflowStatus = "done";
+          closeTime = existing.closeTime;
+          closeSource = "manual";
+        } else if (sourceClosed) {
+          workflowStatus = "done";
+          closeTime = row.closeTime || closeTime || endOfDate(date).toISOString();
+          closeSource = row.closeTime ? "source" : (closeSource || "source");
+        } else if (workflowStatus === "done" && autoClosed) {
           workflowStatus = "pending";
           closeTime = null;
           closeSource = null;
