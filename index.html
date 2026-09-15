@@ -265,6 +265,7 @@
 
     .notice.show { display: block; }
     .notice.error { color: var(--red); border-color: #efbbb5; background: var(--red-soft); }
+    .notice .btn { margin-left: 10px; }
 
     .snapshot-strip {
       min-height: 46px;
@@ -295,6 +296,7 @@
     .delta-list b { color: var(--ink); }
     .delta-list .added b { color: var(--teal); }
     .delta-list .closed b { color: var(--blue); }
+    .delta-list .late b { color: var(--red); }
 
     .kpi-grid {
       display: grid;
@@ -535,6 +537,7 @@
     .badge.p3 { color: var(--blue); background: var(--blue-soft); }
     .badge.p4, .badge.healthy, .badge.compliant { color: var(--green); background: var(--green-soft); }
     .badge.missing, .badge.noncompliant { color: var(--amber); background: var(--amber-soft); }
+    .badge.late { color: var(--red); background: var(--red-soft); border: 1px solid #efbbb5; }
 
     .ticket h3 {
       margin: 10px 0 7px;
@@ -1031,7 +1034,7 @@
         <button class="metric overdue" data-metric-filter="overdue">
           <span class="metric-label">已超期<i data-lucide="circle-alert"></i></span>
           <strong class="metric-value" id="metricOverdue">0</strong>
-          <span class="metric-foot">P0/P1 &gt; 48 小时 · P2-P4 &gt; 15 天</span>
+          <span class="metric-foot" id="metricOverdueFoot">P0/P1 &gt; 48 小时 · P2-P4 &gt; 15 天</span>
         </button>
         <button class="metric warning" data-metric-filter="warning">
           <span class="metric-label">即将超期<i data-lucide="timer"></i></span>
@@ -1128,7 +1131,7 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>日期</th><th>文件</th><th>本批工单</th><th>新增</th><th>保留</th><th>自动结案</th><th>导入时间</th></tr></thead>
+              <thead><tr><th>日期</th><th>文件</th><th>本批工单</th><th>新增</th><th>保留</th><th>自动结案</th><th>新增即超期</th><th>导入时间</th></tr></thead>
               <tbody id="dailyHistoryTable"></tbody>
             </table>
           </div>
@@ -1637,15 +1640,39 @@
       return ["P0", "P1"].includes(ticket.priority) ? 24 * HOUR : 7 * DAY;
     }
 
-    function getRisk(ticket) {
+    function getRiskAt(ticket, asOf) {
       if (ticket.workflowStatus === "done") return { key: "done", label: "已结案", elapsed: null, remaining: null };
       const dispatched = parseDate(ticket.lastDispatchTime);
       if (!dispatched) return { key: "missing", label: "时间缺失", elapsed: null, remaining: null };
-      const elapsed = riskAsOf().getTime() - dispatched.getTime();
+      const elapsed = asOf.getTime() - dispatched.getTime();
       const remaining = getSlaMs(ticket) - elapsed;
       if (elapsed > getSlaMs(ticket)) return { key: "overdue", label: "已超期", elapsed, remaining };
       if (remaining >= 0 && remaining <= getWarningMs(ticket)) return { key: "warning", label: "即将超期", elapsed, remaining };
       return { key: "healthy", label: "正常", elapsed, remaining };
+    }
+
+    function getRisk(ticket) {
+      return getRiskAt(ticket, riskAsOf());
+    }
+
+    function lateOverdueIdsForSnapshot(snapshot = latestSnapshot()) {
+      if (!snapshot) return [];
+      if (Array.isArray(snapshot.lateOverdueIds)) return snapshot.lateOverdueIds;
+      const previous = [...state.snapshots]
+        .filter(item => item.date < snapshot.date)
+        .sort((a, b) => b.date.localeCompare(a.date))[0] || null;
+      if (!previous) return [];
+      const previousIds = new Set(previous.ids || []);
+      const asOf = parseDate(snapshot.importedAt) || endOfDate(snapshot.date);
+      return (snapshot.ids || []).filter(id => {
+        const ticket = state.tickets.find(item => item.id === id);
+        return !previousIds.has(id) && ticket && getRiskAt(ticket, asOf).key === "overdue";
+      });
+    }
+
+    function latestLateOverdueTickets() {
+      const ids = new Set(lateOverdueIdsForSnapshot());
+      return state.tickets.filter(ticket => ids.has(ticket.id) && ticket.workflowStatus !== "done" && getRisk(ticket).key === "overdue");
     }
 
     function formatDuration(ms) {
@@ -1687,10 +1714,12 @@
       const currentIds = new Set(normalized.map(row => row.id));
       const existingMap = new Map(state.tickets.map(ticket => [ticket.id, ticket]));
       const importedAt = new Date().toISOString();
+      const riskAtImport = date === localDateKey() ? new Date(importedAt) : endOfDate(date);
 
       let added = 0;
       let retained = 0;
       let reopened = 0;
+      const lateOverdueIds = [];
 
       normalized.forEach(row => {
         const existing = existingMap.get(row.id);
@@ -1722,7 +1751,7 @@
           reopened += 1;
         }
 
-        existingMap.set(row.id, {
+        const merged = {
           ...existing,
           ...row,
           workflowStatus,
@@ -1731,7 +1760,12 @@
           firstSeenDate: existing?.firstSeenDate || date,
           lastSeenDate: date,
           statusChangedAt: existing?.statusChangedAt || importedAt
-        });
+        };
+        existingMap.set(row.id, merged);
+
+        if (comparison && !isRetained && getRiskAt(merged, riskAtImport).key === "overdue") {
+          lateOverdueIds.push(row.id);
+        }
       });
 
       let autoClosed = 0;
@@ -1757,7 +1791,8 @@
         added,
         retained,
         autoClosed,
-        reopened
+        reopened,
+        lateOverdueIds
       };
 
       state.tickets = [...existingMap.values()];
@@ -1839,6 +1874,7 @@
       const supplier = $("supplierFilter").value;
       const status = $("statusFilter").value;
       const sort = $("sortFilter").value;
+      const lateIds = new Set(latestLateOverdueTickets().map(ticket => ticket.id));
 
       const rows = state.tickets.filter(ticket => {
         const risk = getRisk(ticket).key;
@@ -1846,6 +1882,7 @@
         const quickOk = quickFilter === "all"
           || quickFilter === ticket.priority
           || quickFilter === risk
+          || (quickFilter === "late" && lateIds.has(ticket.id))
           || (quickFilter === "open" && ticket.workflowStatus !== "done");
         return quickOk
           && (!query || haystack.includes(query))
@@ -1883,6 +1920,7 @@
           <span>保留 <b>${latest.retained}</b></span>
           <span class="closed">自动结案 <b>${latest.autoClosed}</b></span>
           ${latest.reopened ? `<span>重新出现 <b>${latest.reopened}</b></span>` : ""}
+          ${lateOverdueIdsForSnapshot(latest).length ? `<span class="late">新增即超期 <b>${lateOverdueIdsForSnapshot(latest).length}</b></span>` : ""}
         </div>`;
       $("asOfText").textContent = `风险计算截至 ${formatDate(riskAsOf(), true)}`;
     }
@@ -1894,15 +1932,28 @@
       const overdue = open.filter(ticket => getRisk(ticket).key === "overdue").length;
       const warning = open.filter(ticket => getRisk(ticket).key === "warning").length;
       const missing = open.filter(ticket => getRisk(ticket).key === "missing").length;
+      const lateOverdue = latestLateOverdueTickets();
       const overallKpi = calculateKpi(state.kpiRecords);
 
       $("metricOpen").textContent = open.length;
       $("metricOpenFoot").textContent = `待处理 ${pending} · 核实中 ${checking}`;
       $("metricOverdue").textContent = overdue;
+      $("metricOverdueFoot").textContent = lateOverdue.length
+        ? `其中 ${lateOverdue.length} 条未出现在上一份表，导入时已超期`
+        : "P0/P1 > 48 小时 · P2-P4 > 15 天";
       $("metricWarning").textContent = warning;
       $("metricKpi").textContent = overallKpi.total ? `${overallKpi.rate}%` : "-";
       $("metricKpiFoot").textContent = overallKpi.total ? `${overallKpi.compliant} / ${overallKpi.total} 条在 15 天内结案` : "尚未导入 KPI 明细";
       $("qualityHint").textContent = missing ? `${missing} 条缺最后派送时间` : "";
+      const notice = $("notice");
+      if (lateOverdue.length) {
+        const ids = lateOverdue.map(ticket => `#${ticket.id}`).join("、");
+        notice.className = "notice show error";
+        notice.innerHTML = `<strong>数据迟到：${esc(ids)}</strong> 未出现在上一份待处理表，本次导入时已经超期。<button class="btn small" data-quick="late">查看明细</button>`;
+      } else {
+        notice.className = "notice";
+        notice.textContent = "";
+      }
       $("headline").textContent = latestSnapshot()
         ? `未结案 ${open.length} · 已超期 ${overdue} · 即将超期 ${warning}`
         : "等待导入待处理工单";
@@ -1911,6 +1962,7 @@
     function renderQuickFilters() {
       const counts = Object.fromEntries(["P0", "P1", "P2", "P3", "P4"].map(priority => [priority, state.tickets.filter(ticket => ticket.priority === priority).length]));
       const open = state.tickets.filter(ticket => ticket.workflowStatus !== "done");
+      const lateOverdue = latestLateOverdueTickets();
       const options = [
         ["all", `全部 ${state.tickets.length}`],
         ["P0", `P0 ${counts.P0}`],
@@ -1918,6 +1970,7 @@
         ["P2", `P2 ${counts.P2}`],
         ["P3", `P3 ${counts.P3}`],
         ["P4", `P4 ${counts.P4}`],
+        ...(lateOverdue.length ? [["late", `新增即超期 ${lateOverdue.length}`]] : []),
         ["warning", `即将超期 ${open.filter(ticket => getRisk(ticket).key === "warning").length}`],
         ["overdue", `已超期 ${open.filter(ticket => getRisk(ticket).key === "overdue").length}`]
       ];
@@ -1926,12 +1979,13 @@
 
     function renderTicket(ticket) {
       const risk = getRisk(ticket);
+      const isLateOverdue = latestLateOverdueTickets().some(item => item.id === ticket.id);
       const ratio = risk.elapsed === null ? 0 : Math.max(0, Math.min(100, Math.round(risk.elapsed / getSlaMs(ticket) * 100)));
       const colors = { overdue: "var(--red)", warning: "var(--amber)", healthy: "var(--green)", missing: "var(--line-strong)", done: "var(--blue)" };
       return `<article class="ticket ${ticket.priority.toLowerCase()} ${ticket.id === selectedTicketId ? "selected" : ""}" data-ticket-id="${esc(ticket.id)}" tabindex="0">
         <div class="ticket-top">
           <span class="ticket-id">#${esc(ticket.id)}</span>
-          <div class="badges"><span class="badge ${ticket.priority.toLowerCase()}">${esc(ticket.priority)}</span><span class="badge ${risk.key}">${esc(risk.label)}</span></div>
+          <div class="badges"><span class="badge ${ticket.priority.toLowerCase()}">${esc(ticket.priority)}</span><span class="badge ${risk.key}">${esc(risk.label)}</span>${isLateOverdue ? `<span class="badge late">新增即超期</span>` : ""}</div>
         </div>
         <h3>${esc(ticket.title)}</h3>
         <p class="ticket-problem">${esc(ticket.problem)}</p>
@@ -1974,10 +2028,11 @@
         return;
       }
       const risk = getRisk(ticket);
+      const isLateOverdue = latestLateOverdueTickets().some(item => item.id === ticket.id);
       $("detailPanel").innerHTML = `<div class="detail-body">
         <div class="detail-head">
           <div><span class="ticket-id">#${esc(ticket.id)}</span><h2>${esc(ticket.title)}</h2></div>
-          <div class="badges"><span class="badge ${ticket.priority.toLowerCase()}">${esc(ticket.priority)}</span><span class="badge ${risk.key}">${esc(risk.label)}</span></div>
+          <div class="badges"><span class="badge ${ticket.priority.toLowerCase()}">${esc(ticket.priority)}</span><span class="badge ${risk.key}">${esc(risk.label)}</span>${isLateOverdue ? `<span class="badge late">新增即超期</span>` : ""}</div>
         </div>
         <section class="detail-section">
           <h3>工单处理明细</h3>
@@ -2099,8 +2154,8 @@
     function renderHistory() {
       const dailyRows = [...state.snapshots].sort((a, b) => b.date.localeCompare(a.date));
       $("dailyHistoryTable").innerHTML = dailyRows.length ? dailyRows.map(batch => `<tr>
-        <td><strong>${esc(batch.date)}</strong></td><td class="wrap">${esc(batch.fileName)}</td><td>${batch.ids.length}</td><td>${batch.added}</td><td>${batch.retained}</td><td>${batch.autoClosed}</td><td>${formatDate(batch.importedAt, true)}</td>
-      </tr>`).join("") : `<tr><td colspan="7"><div class="empty">暂无待处理导入记录</div></td></tr>`;
+        <td><strong>${esc(batch.date)}</strong></td><td class="wrap">${esc(batch.fileName)}</td><td>${batch.ids.length}</td><td>${batch.added}</td><td>${batch.retained}</td><td>${batch.autoClosed}</td><td>${lateOverdueIdsForSnapshot(batch).length}</td><td>${formatDate(batch.importedAt, true)}</td>
+      </tr>`).join("") : `<tr><td colspan="8"><div class="empty">暂无待处理导入记录</div></td></tr>`;
 
       const kpiRows = [...state.kpiImports].reverse();
       $("kpiHistoryTable").innerHTML = kpiRows.length ? kpiRows.map(batch => `<tr>
@@ -2266,6 +2321,9 @@
         clearFilters();
         switchView("board");
         toast(`导入完成：新增 ${result.added} 条，保留 ${result.retained} 条，自动结案 ${result.autoClosed} 条。`);
+        if (result.lateOverdueIds.length) {
+          toast(`注意：${result.lateOverdueIds.length} 条工单未出现在上一份表，首次导入时已经超期。`, "error");
+        }
       } catch (error) {
         console.error(error);
         toast(error.message || "导入失败，请检查文件。", "error");
