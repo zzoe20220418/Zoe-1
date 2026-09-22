@@ -1280,6 +1280,25 @@
       if (changed) saveState();
     }
 
+    function reconcileLatestPendingSnapshot() {
+      const snapshot = latestSnapshot();
+      if (!snapshot) return;
+      const ids = new Set(snapshot.ids || []);
+      let changed = false;
+      state.tickets.forEach(ticket => {
+        if (!ids.has(ticket.id) || ticket.closeSource !== "manual" || ticket.workflowStatus !== "done") return;
+        if (normalizeStatus(ticket.sourceStatus) === "done") return;
+        const closedAt = parseDate(ticket.statusChangedAt) || parseDate(ticket.closeTime);
+        if (closedAt && localDateKey(closedAt) >= snapshot.date) return;
+        ticket.workflowStatus = normalizeStatus(ticket.sourceStatus);
+        ticket.closeTime = null;
+        ticket.closeSource = null;
+        ticket.statusChangedAt = snapshot.importedAt;
+        changed = true;
+      });
+      if (changed) saveState();
+    }
+
     function localDateKey(date = new Date()) {
       const d = date instanceof Date ? date : new Date(date);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -2373,6 +2392,7 @@
     });
 
     refreshStoredBriefs();
+    reconcileLatestPendingSnapshot();
     $("todayText").textContent = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).format(new Date());
     $("dailyImportDate").value = localDateKey();
     renderAll();
