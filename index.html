@@ -1131,7 +1131,7 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>日期</th><th>文件</th><th>本批工单</th><th>新增</th><th>保留</th><th>自动结案</th><th>新增即超期</th><th>导入时间</th></tr></thead>
+              <thead><tr><th>日期</th><th>文件</th><th>本批工单</th><th>新增</th><th>保留</th><th>自动结案</th><th>恢复待处理</th><th>新增即超期</th><th>导入时间</th></tr></thead>
               <tbody id="dailyHistoryTable"></tbody>
             </table>
           </div>
@@ -1730,24 +1730,30 @@
         const sourceClosed = isSourceClosed(row);
         const manuallyClosed = existing?.closeSource === "manual";
         const autoClosed = existing?.closeSource === "daily_compare";
+        const manualClosedAt = parseDate(existing?.statusChangedAt) || parseDate(existing?.closeTime);
+        const manualClosedDate = manualClosedAt ? localDateKey(manualClosedAt) : "";
+        const manuallyClosedOnOrAfterSnapshot = manuallyClosed && manualClosedDate >= date;
         let workflowStatus = existing?.workflowStatus || normalizeStatus(row.sourceStatus);
         let closeTime = existing?.closeTime || row.closeTime;
         let closeSource = existing?.closeSource || (row.closeTime ? "source" : null);
+        let statusChangedAt = existing?.statusChangedAt || importedAt;
 
-        // A daily source file can still list a ticket after it was completed in this board.
-        // Preserve manual completion; only reopen tickets that were auto-closed by a prior comparison.
-        if (manuallyClosed) {
-          workflowStatus = "done";
-          closeTime = existing.closeTime;
-          closeSource = "manual";
-        } else if (sourceClosed) {
+        if (sourceClosed) {
           workflowStatus = "done";
           closeTime = row.closeTime || closeTime || endOfDate(date).toISOString();
           closeSource = row.closeTime ? "source" : (closeSource || "source");
-        } else if (workflowStatus === "done" && autoClosed) {
-          workflowStatus = "pending";
+        } else if (manuallyClosedOnOrAfterSnapshot) {
+          // Re-importing today's file must not undo a completion made today.
+          workflowStatus = "done";
+          closeTime = existing.closeTime;
+          closeSource = "manual";
+        } else if (workflowStatus === "done" && (autoClosed || manuallyClosed)) {
+          // A new daily source is authoritative: if a prior completion still appears
+          // as open on a later day's pending list, put it back into active work.
+          workflowStatus = normalizeStatus(row.sourceStatus);
           closeTime = null;
           closeSource = null;
+          statusChangedAt = importedAt;
           reopened += 1;
         }
 
@@ -1759,7 +1765,7 @@
           closeSource,
           firstSeenDate: existing?.firstSeenDate || date,
           lastSeenDate: date,
-          statusChangedAt: existing?.statusChangedAt || importedAt
+          statusChangedAt
         };
         existingMap.set(row.id, merged);
 
@@ -1919,7 +1925,7 @@
           <span class="added">新增 <b>${latest.added}</b></span>
           <span>保留 <b>${latest.retained}</b></span>
           <span class="closed">自动结案 <b>${latest.autoClosed}</b></span>
-          ${latest.reopened ? `<span>重新出现 <b>${latest.reopened}</b></span>` : ""}
+          ${latest.reopened ? `<span>恢复待处理 <b>${latest.reopened}</b></span>` : ""}
           ${lateOverdueIdsForSnapshot(latest).length ? `<span class="late">新增即超期 <b>${lateOverdueIdsForSnapshot(latest).length}</b></span>` : ""}
         </div>`;
       $("asOfText").textContent = `风险计算截至 ${formatDate(riskAsOf(), true)}`;
@@ -2154,8 +2160,8 @@
     function renderHistory() {
       const dailyRows = [...state.snapshots].sort((a, b) => b.date.localeCompare(a.date));
       $("dailyHistoryTable").innerHTML = dailyRows.length ? dailyRows.map(batch => `<tr>
-        <td><strong>${esc(batch.date)}</strong></td><td class="wrap">${esc(batch.fileName)}</td><td>${batch.ids.length}</td><td>${batch.added}</td><td>${batch.retained}</td><td>${batch.autoClosed}</td><td>${lateOverdueIdsForSnapshot(batch).length}</td><td>${formatDate(batch.importedAt, true)}</td>
-      </tr>`).join("") : `<tr><td colspan="8"><div class="empty">暂无待处理导入记录</div></td></tr>`;
+        <td><strong>${esc(batch.date)}</strong></td><td class="wrap">${esc(batch.fileName)}</td><td>${batch.ids.length}</td><td>${batch.added}</td><td>${batch.retained}</td><td>${batch.autoClosed}</td><td>${batch.reopened || 0}</td><td>${lateOverdueIdsForSnapshot(batch).length}</td><td>${formatDate(batch.importedAt, true)}</td>
+      </tr>`).join("") : `<tr><td colspan="9"><div class="empty">暂无待处理导入记录</div></td></tr>`;
 
       const kpiRows = [...state.kpiImports].reverse();
       $("kpiHistoryTable").innerHTML = kpiRows.length ? kpiRows.map(batch => `<tr>
@@ -2320,7 +2326,7 @@
         $("dailyImportDate").value = localDateKey();
         clearFilters();
         switchView("board");
-        toast(`导入完成：新增 ${result.added} 条，保留 ${result.retained} 条，自动结案 ${result.autoClosed} 条。`);
+        toast(`导入完成：新增 ${result.added} 条，保留 ${result.retained} 条，自动结案 ${result.autoClosed} 条，恢复待处理 ${result.reopened} 条。`);
         if (result.lateOverdueIds.length) {
           toast(`注意：${result.lateOverdueIds.length} 条工单未出现在上一份表，首次导入时已经超期。`, "error");
         }
